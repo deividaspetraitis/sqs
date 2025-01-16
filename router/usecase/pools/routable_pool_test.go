@@ -6,7 +6,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/osmosis-labs/sqs/domain"
-	"github.com/osmosis-labs/sqs/sqsdomain"
+	ingesttypes "github.com/osmosis-labs/sqs/ingest/types"
 	"github.com/stretchr/testify/suite"
 
 	cosmwasmdomain "github.com/osmosis-labs/sqs/domain/cosmwasm"
@@ -51,8 +51,8 @@ var (
 	DefaultLiquidityAmt = apptesting.DefaultLiquidityAmt
 
 	// router specific variables
-	defaultTickModel = &sqsdomain.TickModel{
-		Ticks:            []sqsdomain.LiquidityDepthsWithRange{},
+	defaultTickModel = &ingesttypes.TickModel{
+		Ticks:            []ingesttypes.LiquidityDepthsWithRange{},
 		CurrentTickIndex: 0,
 		HasNoLiquidity:   false,
 	}

@@ -1,4 +1,4 @@
-package sqsdomain
+package types
 
 // CandidatePool is a data structure representing a
 // candidate pool to be used for routing.
