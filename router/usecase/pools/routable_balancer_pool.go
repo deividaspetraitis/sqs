@@ -19,20 +19,30 @@ import (
 var _ domain.RoutablePool = &routableBalancerPoolImpl{}
 
 type routableBalancerPoolImpl struct {
-	ChainPool     *balancer.Pool "json:\"pool\""
-	TokenInDenom  string         "json:\"token_in_denom,omitempty\""
-	TokenOutDenom string         "json:\"token_out_denom,omitempty\""
-	TakerFee      osmomath.Dec   "json:\"taker_fee\""
+	ChainPool     *balancer.Pool `json:"pool"`
+	TokenInDenom  string         `json:"token_in_denom,omitempty"`
+	TokenOutDenom string         `json:"token_out_denom,omitempty"`
+	TakerFee      osmomath.Dec   `json:"taker_fee"`
 }
 
 // CalculateTokenOutByTokenIn implements RoutablePool.
 func (r *routableBalancerPoolImpl) CalculateTokenOutByTokenIn(ctx context.Context, tokenIn sdk.Coin) (sdk.Coin, error) {
-	tokenOut, err := r.ChainPool.CalcOutAmtGivenIn(sdk.Context{}, sdk.Coins{tokenIn}, r.TokenOutDenom, r.GetSpreadFactor())
+	tokenOut, err := r.ChainPool.CalcOutAmtGivenIn(sdk.Context{}.WithContext(ctx), sdk.Coins{tokenIn}, r.TokenOutDenom, r.GetSpreadFactor())
 	if err != nil {
 		return sdk.Coin{}, err
 	}
 
 	return tokenOut, nil
+}
+
+// CalculateTokenInByTokenOut implements RoutablePool.
+func (r *routableBalancerPoolImpl) CalculateTokenInByTokenOut(ctx context.Context, tokenOut sdk.Coin) (sdk.Coin, error) {
+	tokenIn, err := r.ChainPool.CalcInAmtGivenOut(sdk.Context{}.WithContext(ctx), sdk.Coins{tokenOut}, r.TokenInDenom, r.GetSpreadFactor())
+	if err != nil {
+		return sdk.Coin{}, err
+	}
+
+	return tokenIn, nil
 }
 
 // GetTokenOutDenom implements RoutablePool.
@@ -54,6 +64,13 @@ func (r *routableBalancerPoolImpl) String() string {
 // Charges the taker fee for the given token in and returns the token in after the fee has been charged.
 func (r *routableBalancerPoolImpl) ChargeTakerFeeExactIn(tokenIn sdk.Coin) (tokenInAfterFee sdk.Coin) {
 	tokenInAfterTakerFee, _ := poolmanager.CalcTakerFeeExactIn(tokenIn, r.TakerFee)
+	return tokenInAfterTakerFee
+}
+
+// ChargeTakerFee implements domain.RoutablePool.
+// Charges the taker fee for the given token out and returns the token out after the fee has been charged.
+func (r *routableBalancerPoolImpl) ChargeTakerFeeExactOut(tokenIn sdk.Coin) (tokenInAfterFee sdk.Coin) {
+	tokenInAfterTakerFee, _ := poolmanager.CalcTakerFeeExactOut(tokenIn, r.TakerFee)
 	return tokenInAfterTakerFee
 }
 
@@ -94,7 +111,7 @@ func (*routableBalancerPoolImpl) GetType() poolmanagertypes.PoolType {
 
 // CalcSpotPrice implements domain.RoutablePool.
 func (r *routableBalancerPoolImpl) CalcSpotPrice(ctx context.Context, baseDenom string, quoteDenom string) (osmomath.BigDec, error) {
-	spotPrice, err := r.ChainPool.SpotPrice(sdk.Context{}, quoteDenom, baseDenom)
+	spotPrice, err := r.ChainPool.SpotPrice(sdk.Context{}.WithContext(ctx), quoteDenom, baseDenom)
 	if err != nil {
 		return osmomath.BigDec{}, err
 	}

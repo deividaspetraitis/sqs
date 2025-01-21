@@ -19,15 +19,15 @@ import (
 var _ domain.RoutablePool = &routableStableswapPoolImpl{}
 
 type routableStableswapPoolImpl struct {
-	ChainPool     *stableswap.Pool "json:\"pool\""
-	TokenInDenom  string           "json:\"token_in_denom,omitempty\""
-	TokenOutDenom string           "json:\"token_out_denom,omitempty\""
-	TakerFee      osmomath.Dec     "json:\"taker_fee\""
+	ChainPool     *stableswap.Pool `json:"pool"`
+	TokenInDenom  string           `json:"token_in_denom,omitempty"`
+	TokenOutDenom string           `json:"token_out_denom,omitempty"`
+	TakerFee      osmomath.Dec     `json:"taker_fee"`
 }
 
 // CalculateTokenOutByTokenIn implements RoutablePool.
 func (r *routableStableswapPoolImpl) CalculateTokenOutByTokenIn(ctx context.Context, tokenIn sdk.Coin) (sdk.Coin, error) {
-	tokenOut, err := r.ChainPool.CalcOutAmtGivenIn(sdk.Context{}, sdk.Coins{tokenIn}, r.TokenOutDenom, r.GetSpreadFactor())
+	tokenOut, err := r.ChainPool.CalcOutAmtGivenIn(sdk.Context{}.WithContext(ctx), sdk.Coins{tokenIn}, r.TokenOutDenom, r.GetSpreadFactor())
 	if err != nil {
 		return sdk.Coin{}, err
 	}
@@ -35,14 +35,36 @@ func (r *routableStableswapPoolImpl) CalculateTokenOutByTokenIn(ctx context.Cont
 	return tokenOut, nil
 }
 
+// CalculateTokenInByTokenOut implements RoutablePool.
+func (r *routableStableswapPoolImpl) CalculateTokenInByTokenOut(ctx context.Context, tokenOut sdk.Coin) (sdk.Coin, error) {
+	tokenIn, err := r.ChainPool.CalcInAmtGivenOut(sdk.Context{}.WithContext(ctx), sdk.Coins{tokenOut}, r.TokenInDenom, r.GetSpreadFactor())
+	if err != nil {
+		return sdk.Coin{}, err
+	}
+
+	return tokenIn, nil
+}
+
 // GetTokenOutDenom implements RoutablePool.
 func (r *routableStableswapPoolImpl) GetTokenOutDenom() string {
 	return r.TokenOutDenom
 }
 
+// GetTokenInDenom implements RoutablePool.
+func (r *routableStableswapPoolImpl) GetTokenInDenom() string {
+	return r.TokenInDenom
+}
+
 // String implements domain.RoutablePool.
 func (r *routableStableswapPoolImpl) String() string {
 	return fmt.Sprintf("pool (%d), pool type (%d), pool denoms (%v), token out (%s)", r.ChainPool.Id, poolmanagertypes.Balancer, r.ChainPool.GetPoolDenoms(sdk.Context{}), r.TokenOutDenom)
+}
+
+// ChargeTakerFee implements domain.RoutablePool.
+// Charges the taker fee for the given token out and returns the token out after the fee has been charged.
+func (r *routableStableswapPoolImpl) ChargeTakerFeeExactOut(tokenIn sdk.Coin) (tokenInAfterFee sdk.Coin) {
+	tokenInAfterTakerFee, _ := poolmanager.CalcTakerFeeExactOut(tokenIn, r.TakerFee)
+	return tokenInAfterTakerFee
 }
 
 // ChargeTakerFee implements domain.RoutablePool.
@@ -55,11 +77,6 @@ func (r *routableStableswapPoolImpl) ChargeTakerFeeExactIn(tokenIn sdk.Coin) (to
 // GetTakerFee implements domain.RoutablePool.
 func (r *routableStableswapPoolImpl) GetTakerFee() math.LegacyDec {
 	return r.TakerFee
-}
-
-// GetTokenInDenom implements RoutablePool.
-func (r *routableStableswapPoolImpl) GetTokenInDenom() string {
-	return r.TokenInDenom
 }
 
 // SetTokenInDenom implements domain.RoutablePool.
@@ -94,7 +111,7 @@ func (r *routableStableswapPoolImpl) GetType() poolmanagertypes.PoolType {
 
 // CalcSpotPrice implements domain.RoutablePool.
 func (r *routableStableswapPoolImpl) CalcSpotPrice(ctx context.Context, baseDenom string, quoteDenom string) (osmomath.BigDec, error) {
-	spotPrice, err := r.ChainPool.SpotPrice(sdk.Context{}, quoteDenom, baseDenom)
+	spotPrice, err := r.ChainPool.SpotPrice(sdk.Context{}.WithContext(ctx), quoteDenom, baseDenom)
 	if err != nil {
 		return osmomath.BigDec{}, err
 	}

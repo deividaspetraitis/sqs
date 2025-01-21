@@ -18,12 +18,12 @@ import (
 var _ domain.RoutablePool = &routableTransmuterPoolImpl{}
 
 type routableTransmuterPoolImpl struct {
-	ChainPool     *cwpoolmodel.CosmWasmPool "json:\"pool\""
-	Balances      sdk.Coins                 "json:\"balances\""
-	TokenInDenom  string                    "json:\"token_in_denom,omitempty\""
-	TokenOutDenom string                    "json:\"token_out_denom,omitempty\""
-	TakerFee      osmomath.Dec              "json:\"taker_fee\""
-	SpreadFactor  osmomath.Dec              "json:\"spread_factor\""
+	ChainPool     *cwpoolmodel.CosmWasmPool `json:"pool"`
+	Balances      sdk.Coins                 `json:"balances"`
+	TokenInDenom  string                    `json:"token_in_denom,omitempty"`
+	TokenOutDenom string                    `json:"token_out_denom,omitempty"`
+	TakerFee      osmomath.Dec              `json:"taker_fee"`
+	SpreadFactor  osmomath.Dec              `json:"spread_factor"`
 }
 
 // GetId implements domain.RoutablePool.
@@ -56,7 +56,7 @@ func (r *routableTransmuterPoolImpl) GetSpreadFactor() math.LegacyDec {
 func (r *routableTransmuterPoolImpl) CalculateTokenOutByTokenIn(ctx context.Context, tokenIn sdk.Coin) (sdk.Coin, error) {
 	poolType := r.GetType()
 
-	// Esnure that the pool is concentrated
+	// Ensure that the pool is concentrated
 	if poolType != poolmanagertypes.CosmWasm {
 		return sdk.Coin{}, domain.InvalidPoolTypeError{PoolType: int32(poolType)}
 	}
@@ -71,6 +71,27 @@ func (r *routableTransmuterPoolImpl) CalculateTokenOutByTokenIn(ctx context.Cont
 	// No slippage swaps - just return the same amount of token out as token in
 	// as long as there is enough liquidity in the pool.
 	return sdk.Coin{Denom: r.TokenOutDenom, Amount: tokenIn.Amount}, nil
+}
+
+// CalculateTokenInByTokenOut implements domain.RoutablePool.
+func (r *routableTransmuterPoolImpl) CalculateTokenInByTokenOut(ctx context.Context, tokenOut sdk.Coin) (sdk.Coin, error) {
+	poolType := r.GetType()
+
+	// Ensure that the pool is concentrated
+	if poolType != poolmanagertypes.CosmWasm {
+		return sdk.Coin{}, domain.InvalidPoolTypeError{PoolType: int32(poolType)}
+	}
+
+	balances := r.Balances
+
+	// Validate token in balance
+	if err := validateTransmuterBalance(tokenOut.Amount, balances, r.TokenInDenom); err != nil {
+		return sdk.Coin{}, err
+	}
+
+	// No slippage swaps - just return the same amount of token in as token out
+	// as long as there is enough liquidity in the pool.
+	return sdk.Coin{Denom: r.TokenInDenom, Amount: tokenOut.Amount}, nil
 }
 
 // GetTokenOutDenom implements RoutablePool.
@@ -94,15 +115,21 @@ func (r *routableTransmuterPoolImpl) ChargeTakerFeeExactIn(tokenIn sdk.Coin) (in
 	return tokenInAfterTakerFee
 }
 
-// validateTransmuterBalance validates that the balance of the denom to validate is greater than the token in amount.
+// ChargeTakerFeeExactOut implements domain.RoutablePool.
+func (r *routableTransmuterPoolImpl) ChargeTakerFeeExactOut(tokenIn sdk.Coin) (inAmountAfterFee sdk.Coin) {
+	tokenInAfterTakerFee, _ := poolmanager.CalcTakerFeeExactOut(tokenIn, r.GetTakerFee())
+	return tokenInAfterTakerFee
+}
+
+// validateTransmuterBalance validates that the balance of the denom to validate is greater than the token amount.
 // Returns nil on success, error otherwise.
-func validateTransmuterBalance(tokenInAmount osmomath.Int, balances sdk.Coins, denomToValidate string) error {
+func validateTransmuterBalance(tokenAmount osmomath.Int, balances sdk.Coins, denomToValidate string) error {
 	balanceToValidate := balances.AmountOf(denomToValidate)
-	if tokenInAmount.GT(balanceToValidate) {
+	if tokenAmount.GT(balanceToValidate) {
 		return domain.TransmuterInsufficientBalanceError{
 			Denom:         denomToValidate,
 			BalanceAmount: balanceToValidate.String(),
-			Amount:        tokenInAmount.String(),
+			Amount:        tokenAmount.String(),
 		}
 	}
 
